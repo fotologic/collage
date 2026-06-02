@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collage Engine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Cormorant:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #edeae3;
+  --surface: #f4f1eb;
+  --ink:     #1c1b18;
+  --faint:   #9b968f;
+  --border:  #d2cdc5;
+  --red:     #c8384f;
+  --green:   #3d8f5f;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 220px 1fr 210px;
+  grid-template-rows: 44px 1fr;
+  overflow: hidden;
+}
+
+header {
+  grid-column: 1/-1;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  background: var(--surface);
+}
+header h1 { font-family:'Cormorant',serif; font-style:italic; font-weight:300; font-size:18px; letter-spacing:0.02em; }
+header .version { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--faint); }
+header .spacer { flex:1; }
+
+.hbtn {
+  background:none; border:1px solid var(--border); padding:5px 12px;
+  font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em;
+  text-transform:uppercase; cursor:pointer; color:var(--ink); transition:all 0.15s;
+}
+.hbtn:hover { border-color:var(--ink); }
+.hbtn.primary { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.hbtn.primary:hover { background:var(--red); border-color:var(--red); }
+.hbtn:disabled { opacity:0.3; cursor:not-allowed; }
+
+/* ── PANELS ── */
+#leftPanel, #rightPanel {
+  background:var(--surface);
+  display:flex; flex-direction:column;
+  overflow-y:auto;
+}
+#leftPanel { border-right:1px solid var(--border); }
+#rightPanel { border-left:1px solid var(--border); }
+
+.psec { padding:14px 16px; border-bottom:1px solid var(--border); }
+.plabel { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--faint); margin-bottom:10px; }
+
+/* Image slots */
+.img-slot {
+  border:1px dashed var(--border); padding:7px 9px;
+  display:flex; align-items:center; gap:7px;
+  cursor:pointer; transition:border-color 0.15s; margin-bottom:4px;
+}
+.img-slot:hover { border-color:var(--ink); }
+.img-slot.loaded { border-style:solid; border-color:var(--green); }
+.img-slot.active-slot { border-color:var(--red); border-style:solid; }
+.slot-num { font-size:9px; color:var(--faint); min-width:14px; }
+.slot-label { font-size:10px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.slot-thumb { width:28px; height:28px; object-fit:cover; display:none; }
+.img-slot.loaded .slot-thumb { display:block; }
+.slot-clear { font-size:13px; color:var(--faint); background:none; border:none; cursor:pointer; display:none; padding:0 2px; }
+.img-slot.loaded .slot-clear { display:block; }
+.slot-clear:hover { color:var(--red); }
+
+/* Operations */
+.op-grid { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.op-btn {
+  background:none; border:1px solid var(--border); padding:8px 6px;
+  font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.05em;
+  cursor:pointer; text-align:left; color:var(--ink); transition:all 0.12s; position:relative;
+}
+.op-btn:hover { border-color:var(--ink); background:var(--ink); color:var(--bg); }
+.op-btn.active { border-color:var(--red); background:var(--red); color:white; }
+.op-btn:disabled { opacity:0.3; cursor:not-allowed; }
+.op-btn .on { position:absolute; top:3px; right:4px; font-size:8px; opacity:0.35; }
+
+/* Sliders */
+.srow { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.srow label { font-size:9px; color:var(--faint); text-transform:uppercase; letter-spacing:0.1em; min-width:36px; }
+input[type=range] { flex:1; -webkit-appearance:none; height:1px; background:var(--border); outline:none; cursor:pointer; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:8px; height:8px; background:var(--ink); border-radius:50%; }
+.sval { font-size:9px; color:var(--faint); min-width:18px; text-align:right; }
+
+/* Fragment panel */
+.cat-tabs { display:flex; gap:3px; flex-wrap:wrap; margin-bottom:10px; }
+.cat-tab {
+  background:none; border:1px solid var(--border); padding:4px 6px;
+  font-family:'DM Mono',monospace; font-size:9px; letter-spacing:0.06em;
+  cursor:pointer; color:var(--faint); transition:all 0.12s;
+  display:flex; align-items:center; gap:4px;
+}
+.cat-tab:hover { border-color:var(--ink); color:var(--ink); }
+.cat-tab.active { border-color:var(--ink); color:var(--ink); background:var(--bg); }
+.cat-tab svg { flex-shrink:0; }
+
+.frag-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.frag-thumb {
+  border:1px solid var(--border); cursor:pointer;
+  background: repeating-conic-gradient(#d0ccc4 0% 25%, var(--surface) 0% 50%) 0 0 / 8px 8px;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden; aspect-ratio:1; transition:border-color 0.12s;
+}
+.frag-thumb:hover { border-color:var(--ink); }
+.frag-thumb img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
+
+/* Layer list */
+.layer-list { display:flex; flex-direction:column; gap:3px; padding:10px 12px; flex:1; overflow-y:auto; }
+.layer-item {
+  display:flex; align-items:center; gap:5px; padding:4px 5px;
+  border:1px solid transparent; cursor:pointer; transition:all 0.1s; font-size:10px;
+}
+.layer-item:hover { border-color:var(--border); }
+.layer-item.active { border-color:var(--red); background:rgba(200,56,79,0.05); }
+.layer-thumb-sm { width:22px; height:22px; object-fit:cover; border:1px solid var(--border); flex-shrink:0; }
+.layer-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.layer-vis, .layer-del { font-size:11px; cursor:pointer; color:var(--faint); background:none; border:none; padding:0 1px; }
+.layer-vis:hover { color:var(--ink); }
+.layer-del:hover { color:var(--red); }
+.lord { display:flex; flex-direction:column; gap:1px; }
+.lord button { background:none; border:none; font-size:8px; cursor:pointer; color:var(--faint); line-height:1; padding:1px; }
+.lord button:hover { color:var(--ink); }
+
+/* Transform */
+.tx-sec { padding:10px 12px; border-top:1px solid var(--border); }
+.tx-row { display:flex; align-items:center; gap:5px; margin-bottom:4px; }
+.tx-row label { font-size:9px; color:var(--faint); min-width:28px; text-transform:uppercase; letter-spacing:0.08em; }
+.tx-row input[type=number] {
+  width:52px; background:var(--bg); border:1px solid var(--border);
+  padding:3px 4px; font-family:'DM Mono',monospace; font-size:10px; color:var(--ink);
+}
+.tx-row input[type=number]:focus { outline:none; border-color:var(--ink); }
+
+/* Log */
+.log-list {
+  padding:8px 12px; border-top:1px solid var(--border);
+  display:flex; flex-direction:column; gap:2px;
+  max-height:90px; overflow-y:auto; flex-shrink:0;
+}
+.log-e { font-size:9px; color:var(--faint); }
+.log-e span { color:var(--red); }
+
+/* Canvas */
+#canvasArea {
+  position:relative; overflow:hidden; background:var(--bg);
+  display:flex; align-items:center; justify-content:center;
+}
+#scene {
+  position:relative;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.13);
+  overflow:visible;
+}
+.layer-el {
+  position:absolute; cursor:grab; user-select:none; transform-origin:center center;
+}
+.layer-el:active { cursor:grabbing; }
+.layer-el.selected { outline:1px solid var(--red); outline-offset:2px; }
+.layer-el img { display:block; width:100%; height:100%; pointer-events:none; }
+.rot-handle {
+  position:absolute; bottom:-20px; left:50%; transform:translateX(-50%);
+  width:12px; height:12px; background:var(--red); border-radius:50%;
+  cursor:crosshair; display:none;
+}
+.layer-el.selected .rot-handle { display:block; }
+
+/* Setup overlay */
+#setupOverlay {
+  position:fixed; inset:0; background:rgba(28,27,24,0.55);
+  display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.setup-card {
+  background:var(--surface); border:1px solid var(--border);
+  padding:32px 36px; width:360px;
+}
+.setup-card h2 {
+  font-family:'Cormorant',serif; font-style:italic; font-weight:300;
+  font-size:20px; margin-bottom:22px; letter-spacing:0.02em;
+}
+.setup-field { margin-bottom:14px; }
+.setup-field label { font-size:9px; color:var(--faint); text-transform:uppercase; letter-spacing:0.12em; display:block; margin-bottom:6px; }
+.setup-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:5px; }
+.sopt {
+  border:1px solid var(--border); padding:9px; cursor:pointer;
+  text-align:center; font-size:11px; letter-spacing:0.04em; transition:all 0.12s;
+}
+.sopt:hover { border-color:var(--ink); }
+.sopt.active { border-color:var(--ink); background:var(--ink); color:var(--bg); }
+.sopt .dim { font-size:9px; color:var(--faint); margin-top:2px; }
+.sopt.active .dim { color:rgba(255,255,255,0.45); }
+.bg-row { display:flex; gap:6px; margin-top:4px; }
+.bgopt {
+  width:32px; height:32px; border:2px solid var(--border);
+  cursor:pointer; transition:border-color 0.12s;
+}
+.bgopt.active { border-color:var(--ink); }
+.setup-start {
+  width:100%; background:var(--ink); color:var(--bg); border:none;
+  padding:12px; font-family:'DM Mono',monospace; font-size:11px;
+  letter-spacing:0.14em; text-transform:uppercase; cursor:pointer; margin-top:22px; transition:background 0.2s;
+}
+.setup-start:hover { background:var(--red); }
+
+#toast {
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  background:var(--ink); color:var(--bg); padding:7px 18px;
+  font-family:'Cormorant',serif; font-style:italic; font-size:16px;
+  pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:200;
+}
+#toast.show { opacity:1; }
+input[type=file] { display:none; }
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setupOverlay">
+  <div class="setup-card">
+    <h2>New composition</h2>
+    <div class="setup-field">
+      <label>Format</label>
+      <div class="setup-grid" id="fmtGrid">
+        <div class="sopt active" data-v="a4">A4<div class="dim">210 × 297 mm</div></div>
+        <div class="sopt" data-v="a3">A3<div class="dim">297 × 420 mm</div></div>
+        <div class="sopt" data-v="letter">Letter<div class="dim">8.5 × 11 in</div></div>
+        <div class="sopt" data-v="square">Square<div class="dim">280 × 280 mm</div></div>
+      </div>
+    </div>
+    <div class="setup-field">
+      <label>Orientation</label>
+      <div class="setup-grid" id="orGrid">
+        <div class="sopt active" data-v="portrait">Portrait</div>
+        <div class="sopt" data-v="landscape">Landscape</div>
+      </div>
+    </div>
+    <div class="setup-field">
+      <label>Background</label>
+      <div class="bg-row" id="bgGrid">
+        <div class="bgopt active" data-v="#f5f2eb" style="background:#f5f2eb"></div>
+        <div class="bgopt" data-v="#ffffff" style="background:#ffffff"></div>
+        <div class="bgopt" data-v="#1c1b18" style="background:#1c1b18"></div>
+        <div class="bgopt" data-v="#d4b0a0" style="background:#d4b0a0"></div>
+        <div class="bgopt" data-v="#a0b4c8" style="background:#a0b4c8"></div>
+      </div>
+    </div>
+    <button class="setup-start" id="setupStart">Begin</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <h1>Collage Engine</h1>
+  <span class="version">v.05</span>
+  <div class="spacer"></div>
+  <button class="hbtn" id="newBtn">New</button>
+  <button class="hbtn" id="undoBtn" disabled>Undo</button>
+  <button class="hbtn primary" id="exportBtn" disabled>Export PNG</button>
+</header>
+
+<!-- LEFT: images + operations -->
+<div id="leftPanel">
+  <div class="psec">
+    <div class="plabel">Images (max 5)</div>
+    <div id="imageSlots"></div>
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+  <div class="psec">
+    <div class="plabel">Operations</div>
+    <div class="op-grid" id="opGrid"></div>
+  </div>
+  <div class="psec">
+    <div class="plabel">Parameters</div>
+    <div class="srow"><label>Gap</label><input type="range" id="gapSlider" min="2" max="60" value="14"><span class="sval" id="gapVal">14</span></div>
+    <div class="srow"><label>Rough</label><input type="range" id="roughSlider" min="0" max="30" value="8"><span class="sval" id="roughVal">8</span></div>
+    <div class="srow"><label>Seed</label><input type="range" id="seedSlider" min="1" max="999" value="42"><span class="sval" id="seedVal">42</span></div>
+    <button class="hbtn" id="applyBtn" disabled style="width:100%;margin-top:6px">Apply operation</button>
+  </div>
+</div>
+
+<!-- CANVAS -->
+<div id="canvasArea">
+  <div id="scene"></div>
+</div>
+
+<!-- RIGHT: fragments + layers -->
+<div id="rightPanel">
+  <div class="psec">
+    <div class="plabel">Fragments</div>
+    <div class="cat-tabs" id="catTabs"></div>
+    <div class="frag-grid" id="fragGrid"></div>
+  </div>
+  <div class="psec" style="flex:1;overflow-y:auto;min-height:0">
+    <div class="plabel">Layers</div>
+    <div class="layer-list" id="layerList"></div>
+  </div>
+  <div class="tx-sec">
+    <div class="plabel">Transform</div>
+    <div class="tx-row"><label>X</label><input type="number" id="txX" value="0" step="1"></div>
+    <div class="tx-row"><label>Y</label><input type="number" id="txY" value="0" step="1"></div>
+    <div class="tx-row"><label>Rot</label><input type="number" id="txRot" value="0" step="0.5"></div>
+    <div class="tx-row"><label>Scale</label><input type="number" id="txScale" value="1" step="0.05" min="0.05"></div>
+  </div>
+  <div class="log-list" id="logList"><div class="log-e" style="font-style:italic">— log —</div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── FRAGMENT MANIFEST ─────────────────────────────────────────
+// Paths are relative — works on GitHub Pages with fragments/ folder alongside index.html
+const FRAGMENT_MANIFEST = [
+  {cat:'image',     files:[2,3,4,6,10]},
+  {cat:'strip',     files:[11,18,22,23,27,32]},
+  {cat:'square',    files:[19,24,30]},
+  {cat:'rectangle', files:[1,5,7,8,9,12,13,14,15,17,28,29,31]},
+  {cat:'irregular', files:[16,20,21,25,26,33,34,35]},
+];
+
+const FRAGMENTS = [];
+FRAGMENT_MANIFEST.forEach(({cat, files}) => {
+  files.forEach(n => FRAGMENTS.push({ cat, path: `fragments/Fragments${n}.png`, n }));
+});
+
+// ── CATEGORY ICONS (SVG strings) ─────────────────────────────
+const CAT_ICONS = {
+  rectangle: `<svg width="20" height="14" viewBox="0 0 72 52" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0,0 L72,0 L72,52 C68,51 65,53 61,52 C57,51 54,53 50,52 C46,51 43,53 39,52 C35,51 31,53 27,52 C23,51 19,53 15,52 C11,51 7,53 3,52 L0,52 Z"/></svg>`,
+  square:    `<svg width="14" height="14" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0,0 L52,0 L52,52 L0,52 Z"/><path d="M52,0 C51,4 53,9 52,14 C51,19 53,24 52,29 C51,34 53,39 52,44 C51,48 53,51 52,52" stroke-width="2.5"/></svg>`,
+  strip:     `<svg width="24" height="10" viewBox="0 0 84 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0,0 C5,-1 10,1 16,0 C22,-1 28,1 34,0 C40,-1 46,1 52,0 C58,-1 64,1 70,0 C76,-1 80,1 84,0 L84,12 C80,13 76,11 70,12 C64,13 58,11 52,12 C46,13 40,11 34,12 C28,13 22,11 16,12 C10,13 5,11 0,12 Z"/></svg>`,
+  image:     `<svg width="14" height="16" viewBox="0 0 48 56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="0,0 36,0 48,12 48,56 0,56"/><polyline points="36,0 36,12 48,12" stroke-dasharray="2,2" stroke-width="1.2"/><rect x="6" y="22" width="36" height="22" stroke-dasharray="2,2" stroke-width="1"/></svg>`,
+  irregular: `<svg width="14" height="14" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12,2 C18,0 26,1 32,3 C37,5 40,4 42,10 C44,16 43,22 44,28 C45,34 42,38 38,41 C34,44 28,43 22,43 C16,43 10,44 7,40 C4,36 5,30 4,24 C3,18 4,12 7,7 C8,5 10,3 12,2 Z"/></svg>`,
+};
+
+const CAT_ORDER = ['rectangle','square','strip','image','irregular'];
+
+// ── FORMATS ──────────────────────────────────────────────────
+const FORMATS = { a4:{w:794,h:1123}, a3:{w:1123,h:1587}, letter:{w:816,h:1056}, square:{w:1000,h:1000} };
+
+// ── STATE ────────────────────────────────────────────────────
+const S = {
+  format:'a4', orient:'portrait', bg:'#f5f2eb',
+  canvasW:0, canvasH:0,
+  layers:[], selected:null,
+  activeSlot:null, images:[],
+  history:[], ready:false,
+  activeCat: 'rectangle',
+};
+
+let nextId = 1;
+const uid = () => nextId++;
+const canvas = document.getElementById('scene'); // the scene div IS our canvas surface
+
+// ── RNG ──────────────────────────────────────────────────────
+function makeRng(seed) {
+  let s = seed;
+  return () => { s=(s*9301+49297)%233280; return s/233280; };
+}
+
+// ── SETUP ────────────────────────────────────────────────────
+let sFmt='a4', sOr='portrait', sBg='#f5f2eb';
+
+document.querySelectorAll('#fmtGrid .sopt').forEach(el => el.addEventListener('click', () => {
+  document.querySelectorAll('#fmtGrid .sopt').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active'); sFmt=el.dataset.v;
+}));
+document.querySelectorAll('#orGrid .sopt').forEach(el => el.addEventListener('click', () => {
+  document.querySelectorAll('#orGrid .sopt').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active'); sOr=el.dataset.v;
+}));
+document.querySelectorAll('#bgGrid .bgopt').forEach(el => el.addEventListener('click', () => {
+  document.querySelectorAll('#bgGrid .bgopt').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active'); sBg=el.dataset.v;
+}));
+
+document.getElementById('setupStart').addEventListener('click', () => {
+  S.format=sFmt; S.orient=sOr; S.bg=sBg;
+  initCanvas();
+  document.getElementById('setupOverlay').style.display='none';
+  S.ready=true;
+  log('canvas',`${sFmt} ${sOr}`);
+  S.activeSlot=0;
+  setTimeout(()=>document.getElementById('fileInput').click(), 200);
+});
+
+document.getElementById('newBtn').addEventListener('click', () => {
+  if (!confirm('Start a new composition? Current work will be lost.')) return;
+  S.layers=[]; S.images=[]; S.selected=null; S.history=[]; S.ready=false;
+  canvas.innerHTML='';
+  document.getElementById('layerList').innerHTML='';
+  buildSlots();
+  document.getElementById('setupOverlay').style.display='flex';
+  document.getElementById('exportBtn').disabled=true;
+  document.getElementById('undoBtn').disabled=true;
+  document.getElementById('logList').innerHTML='<div class="log-e" style="font-style:italic">— log —</div>';
+});
+
+// ── CANVAS INIT ───────────────────────────────────────────────
+function initCanvas() {
+  const fmt=FORMATS[S.format];
+  let w=fmt.w, h=fmt.h;
+  if (S.orient==='landscape') [w,h]=[h,w];
+  S.canvasW=w; S.canvasH=h;
+  canvas.style.width=w+'px';
+  canvas.style.height=h+'px';
+  canvas.style.background=S.bg;
+  fitScene();
+  window.addEventListener('resize', fitScene);
+}
+
+function fitScene() {
+  const area=document.getElementById('canvasArea');
+  const aw=area.clientWidth-80, ah=area.clientHeight-80;
+  const scale=Math.min(aw/S.canvasW, ah/S.canvasH, 1);
+  canvas.style.transform=`scale(${scale})`;
+  canvas.style.transformOrigin='center center';
+}
+
+function getSceneScale() {
+  const m=new DOMMatrix(getComputedStyle(canvas).transform);
+  return m.a;
+}
+
+// ── IMAGE SLOTS ───────────────────────────────────────────────
+function buildSlots() {
+  const c=document.getElementById('imageSlots');
+  c.innerHTML='';
+  for (let i=0;i<5;i++) {
+    const s=document.createElement('div');
+    s.className='img-slot'; s.dataset.index=i;
+    s.innerHTML=`<span class="slot-num">${String(i+1).padStart(2,'0')}</span><img class="slot-thumb" src="" alt=""><span class="slot-label">add image</span><button class="slot-clear">×</button>`;
+    s.addEventListener('click', e => {
+      if (e.target.classList.contains('slot-clear')) return;
+      if (!S.ready) return;
+      S.activeSlot=i;
+      if (S.images[i]) {
+        document.querySelectorAll('.img-slot').forEach(x=>x.classList.remove('active-slot'));
+        s.classList.add('active-slot');
+        document.getElementById('applyBtn').disabled=false;
+      } else {
+        document.getElementById('fileInput').click();
+      }
+    });
+    s.querySelector('.slot-clear').addEventListener('click', e => {
+      e.stopPropagation();
+      if (!S.images[i]) return;
+      saveHistory();
+      S.layers=S.layers.filter(l=>l.sourceId!==S.images[i].id);
+      S.images[i]=null;
+      updateSlot(i);
+      rebuildScene(); renderLayers();
+    });
+    c.appendChild(s);
+  }
+}
+buildSlots();
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file=e.target.files[0];
+  if (!file||S.activeSlot===null) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const entry={id:uid(), src:ev.target.result, name:file.name.replace(/\.[^.]+$/,''), img};
+      S.images[S.activeSlot]=entry;
+      updateSlot(S.activeSlot);
+      document.querySelectorAll('.img-slot').forEach(x=>x.classList.remove('active-slot'));
+      document.querySelectorAll('.img-slot')[S.activeSlot].classList.add('active-slot');
+      document.getElementById('applyBtn').disabled=false;
+      placeImage(entry);
+      log('upload',entry.name);
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  this.value='';
+});
+
+function updateSlot(i) {
+  const s=document.querySelectorAll('.img-slot')[i];
+  const e=S.images[i];
+  if (e) {
+    s.classList.add('loaded');
+    s.querySelector('.slot-thumb').src=e.src;
+    s.querySelector('.slot-label').textContent=e.name;
+  } else {
+    s.classList.remove('loaded','active-slot');
+    s.querySelector('.slot-thumb').src='';
+    s.querySelector('.slot-label').textContent='add image';
+  }
+}
+
+function placeImage(entry) {
+  saveHistory();
+  const maxW=S.canvasW*0.65, maxH=S.canvasH*0.65;
+  const scale=Math.min(maxW/entry.img.width, maxH/entry.img.height, 1);
+  const w=Math.round(entry.img.width*scale), h=Math.round(entry.img.height*scale);
+  const rng=makeRng(Date.now()%999);
+  const x=Math.round((S.canvasW-w)/2+(rng()-0.5)*40);
+  const y=Math.round((S.canvasH-h)/2+(rng()-0.5)*40);
+  const layer={id:uid(),type:'image',name:entry.name,sourceId:entry.id,src:entry.src,x,y,w,h,rot:0,scale:1,visible:true};
+  S.layers.push(layer);
+  addEl(layer); renderLayers(); selectLayer(layer.id);
+  document.getElementById('exportBtn').disabled=false;
+}
+
+// ── LAYER ELEMENTS ───────────────────────────────────────────
+function addEl(layer) {
+  const el=document.createElement('div');
+  el.className='layer-el'; el.dataset.id=layer.id;
+  applyTransform(el,layer);
+  const img=document.createElement('img');
+  img.src=layer.src; img.draggable=false;
+  el.appendChild(img);
+  const rh=document.createElement('div');
+  rh.className='rot-handle';
+  el.appendChild(rh);
+  setupDrag(el,layer);
+  setupRotate(rh,el,layer);
+  el.addEventListener('mousedown', e=>{ if(e.target!==rh) selectLayer(layer.id); });
+  canvas.appendChild(el);
+}
+
+function applyTransform(el,layer) {
+  el.style.left=layer.x+'px';
+  el.style.top=layer.y+'px';
+  el.style.width=Math.round(layer.w*layer.scale)+'px';
+  el.style.height=Math.round(layer.h*layer.scale)+'px';
+  el.style.transform=`rotate(${layer.rot}deg)`;
+  el.style.display=layer.visible?'':'none';
+}
+
+function rebuildScene() {
+  canvas.innerHTML='';
+  S.layers.forEach(l=>addEl(l));
+  if (S.selected) selectLayer(S.selected);
+}
+
+// ── DRAG & ROTATE ────────────────────────────────────────────
+function setupDrag(el,layer) {
+  el.addEventListener('mousedown', e=>{
+    if (e.target.classList.contains('rot-handle')) return;
+    e.preventDefault();
+    const sc=getSceneScale();
+    const sx=e.clientX, sy=e.clientY, lx=layer.x, ly=layer.y;
+    const onMove=e=>{ layer.x=Math.round(lx+(e.clientX-sx)/sc); layer.y=Math.round(ly+(e.clientY-sy)/sc); applyTransform(el,layer); updateTxInputs(layer); };
+    const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+}
+
+function setupRotate(handle,el,layer) {
+  handle.addEventListener('mousedown', e=>{
+    e.preventDefault(); e.stopPropagation();
+    const r=el.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    const sa=Math.atan2(e.clientY-cy,e.clientX-cx)*180/Math.PI, sr=layer.rot;
+    const onMove=e=>{ layer.rot=Math.round((sr+Math.atan2(e.clientY-cy,e.clientX-cx)*180/Math.PI-sa)*10)/10; applyTransform(el,layer); updateTxInputs(layer); };
+    const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+}
+
+function selectLayer(id) {
+  S.selected=id;
+  document.querySelectorAll('.layer-el').forEach(e=>e.classList.remove('selected'));
+  document.querySelectorAll('.layer-item').forEach(e=>e.classList.remove('active'));
+  const el=document.querySelector(`.layer-el[data-id="${id}"]`);
+  const li=document.querySelector(`.layer-item[data-id="${id}"]`);
+  if(el) el.classList.add('selected');
+  if(li) li.classList.add('active');
+  const layer=S.layers.find(l=>l.id===id);
+  if(layer) updateTxInputs(layer);
+}
+
+function updateTxInputs(l) {
+  document.getElementById('txX').value=l.x;
+  document.getElementById('txY').value=l.y;
+  document.getElementById('txRot').value=l.rot;
+  document.getElementById('txScale').value=l.scale;
+}
+
+['txX','txY','txRot','txScale'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', function(){
+    if (!S.selected) return;
+    const l=S.layers.find(x=>x.id===S.selected); if(!l) return;
+    const v=parseFloat(this.value);
+    if(id==='txX') l.x=v; if(id==='txY') l.y=v;
+    if(id==='txRot') l.rot=v; if(id==='txScale') l.scale=v;
+    const el=document.querySelector(`.layer-el[data-id="${l.id}"]`);
+    if(el) applyTransform(el,l);
+  });
+});
+
+// ── LAYER LIST ───────────────────────────────────────────────
+function renderLayers() {
+  const list=document.getElementById('layerList');
+  list.innerHTML='';
+  [...S.layers].reverse().forEach(layer=>{
+    const item=document.createElement('div');
+    item.className='layer-item'+(layer.id===S.selected?' active':'');
+    item.dataset.id=layer.id;
+    item.innerHTML=`<img class="layer-thumb-sm" src="${layer.src}"><span class="layer-name">${layer.name}</span><div class="lord"><button data-dir="up">▲</button><button data-dir="dn">▼</button></div><button class="layer-vis">${layer.visible?'◉':'○'}</button><button class="layer-del">×</button>`;
+    item.addEventListener('click', e=>{
+      if (e.target.classList.contains('layer-del')) {
+        saveHistory();
+        S.layers=S.layers.filter(l=>l.id!==layer.id);
+        document.querySelector(`.layer-el[data-id="${layer.id}"]`)?.remove();
+        renderLayers(); return;
+      }
+      if (e.target.classList.contains('layer-vis')) {
+        layer.visible=!layer.visible;
+        const el=document.querySelector(`.layer-el[data-id="${layer.id}"]`);
+        if(el) applyTransform(el,layer);
+        renderLayers(); return;
+      }
+      if (e.target.dataset.dir) {
+        const idx=S.layers.indexOf(layer);
+        if(e.target.dataset.dir==='up'&&idx<S.layers.length-1) [S.layers[idx],S.layers[idx+1]]=[S.layers[idx+1],S.layers[idx]];
+        if(e.target.dataset.dir==='dn'&&idx>0) [S.layers[idx],S.layers[idx-1]]=[S.layers[idx-1],S.layers[idx]];
+        rebuildScene(); renderLayers(); return;
+      }
+      selectLayer(layer.id);
+    });
+    list.appendChild(item);
+  });
+}
+
+// ── FRAGMENT PANEL ───────────────────────────────────────────
+function buildFragPanel() {
+  const tabs=document.getElementById('catTabs');
+  const grid=document.getElementById('fragGrid');
+
+  CAT_ORDER.forEach(cat=>{
+    const btn=document.createElement('button');
+    btn.className='cat-tab'+(cat===S.activeCat?' active':'');
+    btn.dataset.cat=cat;
+    btn.innerHTML=`${CAT_ICONS[cat]}<span>${cat}</span>`;
+    btn.addEventListener('click',()=>{
+      S.activeCat=cat;
+      document.querySelectorAll('.cat-tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderFragGrid();
+    });
+    tabs.appendChild(btn);
+  });
+
+  renderFragGrid();
+}
+
+function renderFragGrid() {
+  const grid=document.getElementById('fragGrid');
+  grid.innerHTML='';
+  FRAGMENTS.filter(f=>f.cat===S.activeCat).forEach(frag=>{
+    const cell=document.createElement('div');
+    cell.className='frag-thumb';
+    cell.title=`Fragments${frag.n}.png`;
+    const img=document.createElement('img');
+    img.src=frag.path;
+    img.alt='';
+    img.loading='lazy';
+    cell.appendChild(img);
+    cell.addEventListener('click',()=>placeFragment(frag));
+    grid.appendChild(cell);
+  });
+}
+
+function placeFragment(frag) {
+  if (!S.ready) { toast('configure canvas first'); return; }
+  saveHistory();
+  const img=new Image();
+  img.onload=()=>{
+    const maxW=S.canvasW*0.4, maxH=S.canvasH*0.4;
+    const scale=Math.min(maxW/img.width, maxH/img.height, 1);
+    const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+    const rng=makeRng(Date.now()%999);
+    const x=Math.round((S.canvasW-w)/2+(rng()-0.5)*80);
+    const y=Math.round((S.canvasH-h)/2+(rng()-0.5)*80);
+    const layer={
+      id:uid(), type:'fragment',
+      name:`frag ${frag.n}`,
+      sourceId:null,
+      src:frag.path,
+      x,y,w,h,
+      rot:(rng()-0.5)*8,
+      scale:1, visible:true,
+    };
+    S.layers.push(layer);
+    addEl(layer); renderLayers(); selectLayer(layer.id);
+    document.getElementById('exportBtn').disabled=false;
+    log('fragment',`Fragments${frag.n}`);
+  };
+  img.src=frag.path;
+}
+
+buildFragPanel();
+
+// ── OPERATIONS ───────────────────────────────────────────────
+const OPS=[
+  {name:'tear',  desc:'rough horizontal tear'},
+  {name:'split', desc:'clean vertical divide'},
+  {name:'swap',  desc:'halves exchange'},
+  {name:'cut',   desc:'diagonal cut'},
+  {name:'punch', desc:'hole through image'},
+  {name:'peel',  desc:'corner lifts'},
+  {name:'slide', desc:'strip pulled sideways'},
+  {name:'fold',  desc:'edge folds over'},
+  {name:'rotate',desc:'piece rotated'},
+  {name:'drift', desc:'piece drifts away'},
+];
+
+let activeOp=null;
+const opGrid=document.getElementById('opGrid');
+OPS.forEach((op,i)=>{
+  const btn=document.createElement('button');
+  btn.className='op-btn'; btn.dataset.op=op.name; btn.title=op.desc;
+  btn.innerHTML=`${op.name}<span class="on">${String(i+1).padStart(2,'0')}</span>`;
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.op-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); activeOp=op.name;
+  });
+  opGrid.appendChild(btn);
+});
+
+['gap','rough','seed'].forEach(id=>{
+  document.getElementById(`${id}Slider`).addEventListener('input',function(){
+    document.getElementById(`${id}Val`).textContent=this.value;
+  });
+});
+
+document.getElementById('applyBtn').addEventListener('click',()=>{
+  if (!activeOp) { toast('select an operation'); return; }
+  if (S.activeSlot===null||!S.images[S.activeSlot]) { toast('select an image slot'); return; }
+  const entry=S.images[S.activeSlot];
+  const gap=parseInt(document.getElementById('gapSlider').value);
+  const rough=parseInt(document.getElementById('roughSlider').value);
+  const seed=parseInt(document.getElementById('seedSlider').value);
+  applyOperation(activeOp,entry,gap,rough,seed);
+});
+
+// ── APPLY OPERATION ──────────────────────────────────────────
+function applyOperation(opName,entry,gap,rough,seed) {
+  saveHistory();
+  const rng=makeRng(seed+S.history.length*137);
+  const srcLayers=S.layers.filter(l=>l.sourceId===entry.id);
+  if (!srcLayers.length) { toast('place image first'); return; }
+  const base=srcLayers[srcLayers.length-1];
+  const W=Math.round(base.w*base.scale), H=Math.round(base.h*base.scale);
+  switch(opName) {
+    case 'tear':   opTear(base,W,H,gap,rough,rng,entry); break;
+    case 'split':  opSplit(base,W,H,gap,rough,rng,entry); break;
+    case 'swap':   opSwap(base,W,H,gap,rough,rng,entry); break;
+    case 'cut':    opCut(base,W,H,gap,rough,rng,entry); break;
+    case 'punch':  opPunch(base,W,H,gap,rough,rng,entry); break;
+    case 'peel':   opPeel(base,W,H,gap,rough,rng,entry); break;
+    case 'slide':  opSlide(base,W,H,gap,rough,rng,entry); break;
+    case 'fold':   opFold(base,W,H,gap,rough,rng,entry); break;
+    case 'rotate': opRotateOp(base,W,H,gap,rough,rng,entry); break;
+    case 'drift':  opDrift(base,W,H,gap,rough,rng,entry); break;
+  }
+  rebuildScene(); renderLayers(); log(opName,entry.name); toast(opName);
+}
+
+function makeLayerFrom(off,base,dx,dy,name,rot=0) {
+  return {id:uid(),type:'fragment',name,sourceId:base.sourceId,src:off.toDataURL('image/png'),x:base.x+dx,y:base.y+dy,w:off.width,h:off.height,rot:base.rot+rot,scale:1,visible:true};
+}
+
+function tornPath(W,yBase,rough,rng,steps) {
+  const pts=[{x:0,y:yBase}];
+  const dx=W/steps;
+  for(let i=1;i<=steps;i++) pts.push({x:i*dx, y:yBase+(rng()-0.5)*2*rough});
+  pts.push({x:W,y:yBase});
+  return pts;
+}
+
+function opTear(base,W,H,gap,rough,rng,entry) {
+  const yBase=Math.floor(H*(0.25+rng()*0.5));
+  const pts=tornPath(W,yBase,rough,rng,Math.max(8,Math.floor(W/10)));
+  function makePart(below) {
+    const off=document.createElement('canvas'); off.width=W; off.height=H;
+    const c=off.getContext('2d'); c.drawImage(entry.img,0,0,W,H);
+    c.save(); c.beginPath();
+    if(below){c.moveTo(0,H);c.lineTo(0,pts[0].y);}else{c.moveTo(0,0);c.lineTo(0,pts[0].y);}
+    pts.forEach(p=>c.lineTo(p.x,p.y));
+    if(below){c.lineTo(W,H);}else{c.lineTo(W,0);}
+    c.closePath(); c.globalCompositeOperation='destination-out'; c.fill(); c.restore();
+    return off;
+  }
+  const half=Math.floor(gap/2);
+  const tL=makeLayerFrom(makePart(false),base,0,-half,base.name+' ↑');
+  const bL=makeLayerFrom(makePart(true), base,0, half,base.name+' ↓');
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,tL,bL);
+}
+
+function opSplit(base,W,H,gap,rough,rng,entry) {
+  const xCut=Math.floor(W*(0.3+rng()*0.4)), half=Math.floor(gap/2);
+  const lOff=document.createElement('canvas'); lOff.width=xCut; lOff.height=H;
+  lOff.getContext('2d').drawImage(entry.img,0,0,W,H,0,0,W,H);
+  const rOff=document.createElement('canvas'); rOff.width=W-xCut; rOff.height=H;
+  rOff.getContext('2d').drawImage(entry.img,-xCut,0,W,H);
+  const lL=makeLayerFrom(lOff,base,-half,0,base.name+' ←');
+  const rL={...makeLayerFrom(rOff,base,0,0,base.name+' →'), x:base.x+xCut+half};
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,lL,rL);
+}
+
+function opSwap(base,W,H,gap,rough,rng,entry) {
+  const xCut=Math.floor(W*(0.3+rng()*0.4));
+  const lOff=document.createElement('canvas'); lOff.width=xCut; lOff.height=H;
+  lOff.getContext('2d').drawImage(entry.img,0,0,W,H,0,0,W,H);
+  const rOff=document.createElement('canvas'); rOff.width=W-xCut; rOff.height=H;
+  rOff.getContext('2d').drawImage(entry.img,-xCut,0,W,H);
+  const rL=makeLayerFrom(rOff,base,0,0,base.name+' swap→');
+  const lL={...makeLayerFrom(lOff,base,0,0,base.name+' swap←'), x:base.x+(W-xCut)+gap};
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,rL,lL);
+}
+
+function opCut(base,W,H,gap,rough,rng,entry) {
+  const angle=(rng()-0.5)*0.6;
+  const cx=W*(0.3+rng()*0.4), cy=H*(0.3+rng()*0.4);
+  const cos=Math.cos(angle), sin=Math.sin(angle), len=Math.max(W,H)*2, half=Math.floor(gap/2);
+  function makeHalf(above) {
+    const off=document.createElement('canvas'); off.width=W; off.height=H;
+    const c=off.getContext('2d'); c.drawImage(entry.img,0,0,W,H);
+    c.save(); c.beginPath();
+    c.moveTo(cx-cos*len,cy-sin*len); c.lineTo(cx+cos*len,cy+sin*len);
+    if(above){c.lineTo(cx+cos*len+sin*len,cy+sin*len-cos*len);c.lineTo(cx-cos*len+sin*len,cy-sin*len-cos*len);}
+    else{c.lineTo(cx+cos*len-sin*len,cy+sin*len+cos*len);c.lineTo(cx-cos*len-sin*len,cy-sin*len+cos*len);}
+    c.closePath(); c.globalCompositeOperation='destination-out'; c.fill(); c.restore();
+    return off;
+  }
+  const aL=makeLayerFrom(makeHalf(true), base, half*sin,-half*cos,base.name+' /A');
+  const bL=makeLayerFrom(makeHalf(false),base,-half*sin, half*cos,base.name+' /B');
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,aL,bL);
+}
+
+function opPunch(base,W,H,gap,rough,rng,entry) {
+  const off=document.createElement('canvas'); off.width=W; off.height=H;
+  const c=off.getContext('2d'); c.drawImage(entry.img,0,0,W,H);
+  for(let h=0;h<1+Math.floor(rng()*2);h++){
+    const cx=Math.floor(W*(0.2+rng()*0.6)), cy=Math.floor(H*(0.2+rng()*0.6));
+    const rx=Math.floor(W*0.05+rng()*W*0.1), ry=Math.floor(H*0.04+rng()*H*0.08);
+    const pts=10+Math.floor(rng()*6);
+    c.save(); c.beginPath();
+    for(let i=0;i<pts;i++){const t=(i/pts)*Math.PI*2,j=1+(rng()-0.5)*(rough/15);i===0?c.moveTo(cx+Math.cos(t)*rx*j,cy+Math.sin(t)*ry*j):c.lineTo(cx+Math.cos(t)*rx*j,cy+Math.sin(t)*ry*j);}
+    c.closePath(); c.globalCompositeOperation='destination-out'; c.fill(); c.restore();
+  }
+  const l=makeLayerFrom(off,base,0,0,base.name+' (punched)');
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,l);
+}
+
+function opPeel(base,W,H,gap,rough,rng,entry) {
+  const off=document.createElement('canvas'); off.width=W; off.height=H;
+  const c=off.getContext('2d'); c.drawImage(entry.img,0,0,W,H);
+  const size=Math.floor(W*0.25+rng()*W*0.15);
+  const corners=[[0,0],[W,0],[0,H],[W,H]];
+  const [cx,cy]=corners[Math.floor(rng()*corners.length)];
+  const sx=cx===W?1:-1, sy=cy===H?1:-1;
+  c.save(); c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx-sx*size,cy); c.lineTo(cx,cy-sy*size); c.closePath();
+  c.globalCompositeOperation='destination-out'; c.fill(); c.restore();
+  const fOff=document.createElement('canvas'); fOff.width=size; fOff.height=size;
+  fOff.getContext('2d').drawImage(entry.img,cx===W?W-size:0,cy===H?H-size:0,size,size,0,0,size,size);
+  const mL=makeLayerFrom(off,base,0,0,base.name+' (peeled)');
+  const fL=makeLayerFrom(fOff,base,(cx===W?W-size:-gap*0.5),(cy===H?H-size:-gap*0.5),base.name+' flap',(rng()-0.5)*18);
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,mL,fL);
+}
+
+function opSlide(base,W,H,gap,rough,rng,entry) {
+  const sy=Math.floor(H*(0.2+rng()*0.6)), sh=Math.floor(H*(0.1+rng()*0.2));
+  const shift=(rng()>0.5?1:-1)*Math.floor(gap*2+W*0.04);
+  function crop(dy,dh){const o=document.createElement('canvas');o.width=W;o.height=dh;o.getContext('2d').drawImage(entry.img,0,-dy,W,H);return o;}
+  const tL=makeLayerFrom(crop(0,sy),   base,0,0,   base.name+' top');
+  const mL=makeLayerFrom(crop(sy,sh),  base,shift,sy,base.name+' strip');
+  const bL=makeLayerFrom(crop(sy+sh,H-sy-sh),base,0,sy+sh,base.name+' bot');
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,tL,mL,bL);
+}
+
+function opFold(base,W,H,gap,rough,rng,entry) {
+  const sides=['top','bottom','left','right'], side=sides[Math.floor(rng()*4)];
+  const depth=Math.floor(H*0.08+rng()*H*0.1);
+  const mOff=document.createElement('canvas'); mOff.width=W; mOff.height=H;
+  const mc=mOff.getContext('2d'); mc.drawImage(entry.img,0,0,W,H);
+  mc.globalCompositeOperation='destination-out';
+  let fOff, fx, fy, fr;
+  if(side==='top'){fOff=document.createElement('canvas');fOff.width=W;fOff.height=depth;fOff.getContext('2d').drawImage(entry.img,0,0,W,depth,0,0,W,depth);mc.fillRect(0,0,W,depth);fx=base.x;fy=base.y-depth-gap;fr=(rng()-0.5)*6;}
+  else if(side==='bottom'){fOff=document.createElement('canvas');fOff.width=W;fOff.height=depth;fOff.getContext('2d').drawImage(entry.img,0,-(H-depth),W,H);mc.fillRect(0,H-depth,W,depth);fx=base.x;fy=base.y+H+gap;fr=(rng()-0.5)*6;}
+  else if(side==='left'){fOff=document.createElement('canvas');fOff.width=depth;fOff.height=H;fOff.getContext('2d').drawImage(entry.img,0,0,depth,H,0,0,depth,H);mc.fillRect(0,0,depth,H);fx=base.x-depth-gap;fy=base.y;fr=(rng()-0.5)*6;}
+  else{fOff=document.createElement('canvas');fOff.width=depth;fOff.height=H;fOff.getContext('2d').drawImage(entry.img,-(W-depth),0,W,H);mc.fillRect(W-depth,0,depth,H);fx=base.x+W+gap;fy=base.y;fr=(rng()-0.5)*6;}
+  const mL=makeLayerFrom(mOff,base,0,0,base.name+' (folded)');
+  const fL={...makeLayerFrom(fOff,base,0,0,base.name+' flap'),x:fx,y:fy,rot:base.rot+fr};
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,mL,fL);
+}
+
+function opRotateOp(base,W,H,gap,rough,rng,entry) {
+  const rw=Math.floor(W*(0.3+rng()*0.35)), rh=Math.floor(H*(0.3+rng()*0.35));
+  const rx=Math.floor(rng()*(W-rw)), ry=Math.floor(rng()*(H-rh));
+  const rot=(rng()-0.5)*25;
+  const mOff=document.createElement('canvas'); mOff.width=W; mOff.height=H;
+  const mc=mOff.getContext('2d'); mc.drawImage(entry.img,0,0,W,H);
+  mc.globalCompositeOperation='destination-out'; mc.fillRect(rx,ry,rw,rh);
+  const pOff=document.createElement('canvas'); pOff.width=rw; pOff.height=rh;
+  pOff.getContext('2d').drawImage(entry.img,-rx,-ry,W,H);
+  const mL=makeLayerFrom(mOff,base,0,0,base.name+' body');
+  const pL={...makeLayerFrom(pOff,base,rx,ry,base.name+' piece'),rot:base.rot+rot};
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,mL,pL);
+}
+
+function opDrift(base,W,H,gap,rough,rng,entry) {
+  const rw=Math.floor(W*(0.2+rng()*0.45)), rh=Math.floor(H*(0.2+rng()*0.45));
+  const rx=Math.floor(rng()*(W-rw)), ry=Math.floor(rng()*(H-rh));
+  const dx=(rng()-0.5)*gap*4, dy=(rng()-0.5)*gap*4, rot=(rng()-0.5)*12;
+  const mOff=document.createElement('canvas'); mOff.width=W; mOff.height=H;
+  const mc=mOff.getContext('2d'); mc.drawImage(entry.img,0,0,W,H);
+  mc.globalCompositeOperation='destination-out'; mc.fillRect(rx,ry,rw,rh);
+  const pOff=document.createElement('canvas'); pOff.width=rw; pOff.height=rh;
+  pOff.getContext('2d').drawImage(entry.img,-rx,-ry,W,H);
+  const mL=makeLayerFrom(mOff,base,0,0,base.name+' body');
+  const pL={...makeLayerFrom(pOff,base,rx+dx,ry+dy,base.name+' drift'),rot:base.rot+rot};
+  const idx=S.layers.indexOf(base); S.layers.splice(idx,1,mL,pL);
+}
+
+// ── UNDO ─────────────────────────────────────────────────────
+function saveHistory() {
+  S.history.push(JSON.parse(JSON.stringify(S.layers)));
+  if(S.history.length>20) S.history.shift();
+  document.getElementById('undoBtn').disabled=false;
+}
+
+document.getElementById('undoBtn').addEventListener('click',()=>{
+  if(!S.history.length) return;
+  S.layers=S.history.pop();
+  if(!S.history.length) document.getElementById('undoBtn').disabled=true;
+  rebuildScene(); renderLayers(); log('undo','—');
+});
+
+// ── EXPORT ───────────────────────────────────────────────────
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const off=document.createElement('canvas');
+  off.width=S.canvasW; off.height=S.canvasH;
+  const c=off.getContext('2d');
+  c.fillStyle=S.bg; c.fillRect(0,0,S.canvasW,S.canvasH);
+  const draw=i=>{
+    if(i>=S.layers.length){
+      const a=document.createElement('a');
+      a.download='collage-engine.png'; a.href=off.toDataURL('image/png'); a.click();
+      log('export',`${S.canvasW}×${S.canvasH}`); return;
+    }
+    const l=S.layers[i];
+    if(!l.visible){draw(i+1);return;}
+    const img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>{
+      c.save();
+      const cx=l.x+l.w*l.scale/2, cy=l.y+l.h*l.scale/2;
+      c.translate(cx,cy); c.rotate(l.rot*Math.PI/180);
+      c.drawImage(img,-l.w*l.scale/2,-l.h*l.scale/2,l.w*l.scale,l.h*l.scale);
+      c.restore(); draw(i+1);
+    };
+    img.onerror=()=>draw(i+1);
+    img.src=l.src;
+  };
+  draw(0);
+});
+
+// ── LOG & TOAST ───────────────────────────────────────────────
+function log(action,detail) {
+  const list=document.getElementById('logList');
+  const e=document.createElement('div');
+  e.className='log-e';
+  e.innerHTML=`<span>${action}</span> — ${detail}`;
+  list.insertBefore(e,list.firstChild);
+}
+function toast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1100);
+}
+</script>
+</body>
+</html>
